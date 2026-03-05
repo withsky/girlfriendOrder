@@ -17,6 +17,9 @@ const state = {
   editorImages: [],
   orderFilter: 'all',
   kitchenMode: false,
+  previewImages: [],
+  previewIndex: 0,
+  previewDishName: '',
   brand: {
     title: '宝宝餐厅',
     subtitle: '',
@@ -47,6 +50,11 @@ const els = {
   modalDesc: document.getElementById('modalDesc'),
   modalTime: document.getElementById('modalTime'),
   modalSpice: document.getElementById('modalSpice'),
+  imagePreviewModal: document.getElementById('imagePreviewModal'),
+  imagePreviewImage: document.getElementById('imagePreviewImage'),
+  imagePreviewMeta: document.getElementById('imagePreviewMeta'),
+  imagePreviewPrevBtn: document.getElementById('imagePreviewPrevBtn'),
+  imagePreviewNextBtn: document.getElementById('imagePreviewNextBtn'),
   modalIngredients: document.getElementById('modalIngredients'),
   modalSeasonings: document.getElementById('modalSeasonings'),
   modalSteps: document.getElementById('modalSteps'),
@@ -95,6 +103,31 @@ function notify(msg) {
 
 const CATEGORY_ALL = '__all__';
 const CATEGORY_FREQUENT = '__frequent__';
+const DRAFT_DISH_KEY = 'gf-draft-dish-editor-v1';
+const DRAFT_BRAND_KEY = 'gf-draft-brand-v1';
+const DRAFT_ORDER_NOTE_KEY = 'gf-draft-order-note-v1';
+
+function loadDraft(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function saveDraft(key, val) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
+function clearDraft(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
 
 function localSaveCart() {
   localStorage.setItem('gf-order-cart', JSON.stringify(state.cart));
@@ -107,6 +140,9 @@ function localLoadCart() {
   } catch {
     state.cart = [];
   }
+  try {
+    els.orderNote.value = localStorage.getItem(DRAFT_ORDER_NOTE_KEY) || '';
+  } catch {}
 }
 
 async function api(url, options = {}) {
@@ -302,17 +338,39 @@ function openDishModal(dishId) {
   state.modalDishId = dish.id;
 
   const images = dishImages(dish);
+  let activeIndex = 0;
   els.modalImage.src = images[0];
   els.modalThumbs.innerHTML = '';
-  images.forEach((url) => {
+  const setActiveImage = (index) => {
+    activeIndex = index;
+    els.modalImage.src = images[index];
+    els.modalThumbs.querySelectorAll('.modal-thumb').forEach((node, i) => {
+      node.classList.toggle('is-active', i === index);
+    });
+  };
+  images.forEach((url, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'modal-thumb';
+    btn.setAttribute('aria-label', `查看第 ${index + 1} 张菜品图`);
+    btn.setAttribute('aria-pressed', String(index === activeIndex));
+    btn.onclick = () => {
+      setActiveImage(index);
+      els.modalThumbs.querySelectorAll('.modal-thumb').forEach((node, i) => {
+        node.setAttribute('aria-pressed', String(i === index));
+      });
+    };
+
     const t = document.createElement('img');
     t.src = toThumbUrl(url);
-    t.alt = dish.name;
-    t.onclick = () => {
-      els.modalImage.src = url;
-    };
-    els.modalThumbs.appendChild(t);
+    t.alt = `${dish.name} 图片 ${index + 1}`;
+    t.loading = 'lazy';
+    t.decoding = 'async';
+    btn.appendChild(t);
+    els.modalThumbs.appendChild(btn);
   });
+  setActiveImage(0);
+  els.modalImage.onclick = () => openImagePreview(images, activeIndex, dish.name);
 
   els.modalName.textContent = dish.name;
   els.modalDesc.textContent = dish.description || '暂无介绍';
@@ -332,6 +390,34 @@ function openDishModal(dishId) {
   fillList(els.modalSteps, dish.steps || []);
 
   els.dishModal.showModal();
+}
+
+function updateImagePreview() {
+  if (!state.previewImages.length) return;
+  const index = Math.max(0, Math.min(state.previewIndex, state.previewImages.length - 1));
+  state.previewIndex = index;
+  els.imagePreviewImage.src = state.previewImages[index];
+  els.imagePreviewImage.alt = `${state.previewDishName} 大图 ${index + 1}`;
+  els.imagePreviewMeta.textContent = `${state.previewDishName} · ${index + 1}/${state.previewImages.length}`;
+  const disabled = state.previewImages.length <= 1;
+  els.imagePreviewPrevBtn.disabled = disabled;
+  els.imagePreviewNextBtn.disabled = disabled;
+}
+
+function openImagePreview(images, startIndex = 0, dishName = '菜品') {
+  state.previewImages = Array.isArray(images) ? images.filter(Boolean) : [];
+  if (!state.previewImages.length) return;
+  state.previewIndex = Number.isInteger(startIndex) ? startIndex : 0;
+  state.previewDishName = dishName || '菜品';
+  updateImagePreview();
+  els.imagePreviewModal.showModal();
+}
+
+function shiftPreview(step) {
+  if (!state.previewImages.length) return;
+  const total = state.previewImages.length;
+  state.previewIndex = (state.previewIndex + step + total) % total;
+  updateImagePreview();
 }
 
 function fillList(el, data) {
@@ -461,17 +547,17 @@ function renderOrders() {
 
     const items = order.items.map((item) => `${item.name} x${item.qty}（${item.spiceLevel}）`).join('、');
     card.innerHTML = `
-      <div class="panel-title">
+      <div class="panel-title order-header">
         <strong>订单 ${order.id.slice(-6)}</strong>
         <span class="status ${order.status}">${statusLabel(order.status)}</span>
       </div>
-      <p>${items}</p>
-      <p class="muted">下单时间：${formatTime(order.createdAt)}</p>
-      <p class="muted">备注：${order.note || '无'}</p>
-      <div class="inline"></div>
+      <p class="order-items">${items}</p>
+      <p class="muted order-meta"><span>下单时间：</span>${formatTime(order.createdAt)}</p>
+      <p class="muted order-meta"><span>备注：</span>${order.note || '无'}</p>
+      <div class="inline order-actions"></div>
     `;
 
-    const action = card.querySelector('.inline');
+    const action = card.querySelector('.order-actions');
     [['cooking', '开始制作'], ['ready', '制作完成'], ['served', '已上桌'], ['cancelled', '取消订单']].forEach(([status, label]) => {
       const btn = document.createElement('button');
       btn.textContent = label;
@@ -731,6 +817,44 @@ function renderEditorPreview() {
 
     els.editorImagePreview.appendChild(box);
   });
+  saveDishDraft();
+}
+
+function saveDishDraft() {
+  if (!els.dishEditorModal.open) return;
+  saveDraft(DRAFT_DISH_KEY, {
+    target: state.editingDishId || 'new',
+    values: {
+      name: formField('name').value,
+      categoryId: formField('categoryId').value,
+      spiceLevel: formField('spiceLevel').value,
+      estimateMinutes: formField('estimateMinutes').value,
+      orderCount: formField('orderCount').value,
+      description: formField('description').value,
+      ingredients: formField('ingredients').value,
+      seasonings: formField('seasonings').value,
+      steps: formField('steps').value
+    },
+    editorImages: state.editorImages
+  });
+}
+
+function restoreDishDraft(target) {
+  const draft = loadDraft(DRAFT_DISH_KEY, null);
+  if (!draft || draft.target !== target || !draft.values) return;
+  const v = draft.values;
+  formField('name').value = v.name || '';
+  if (v.categoryId) formField('categoryId').value = v.categoryId;
+  if (v.spiceLevel) formField('spiceLevel').value = v.spiceLevel;
+  if (v.estimateMinutes) formField('estimateMinutes').value = v.estimateMinutes;
+  if (v.orderCount) formField('orderCount').value = v.orderCount;
+  formField('description').value = v.description || '';
+  formField('ingredients').value = v.ingredients || '';
+  formField('seasonings').value = v.seasonings || '';
+  formField('steps').value = v.steps || '';
+  if (Array.isArray(draft.editorImages)) state.editorImages = draft.editorImages;
+  renderEditorPreview();
+  notify('已恢复未保存菜品草稿');
 }
 
 function openDishEditor(dishId) {
@@ -752,6 +876,7 @@ function openDishEditor(dishId) {
   formField('steps').value = listToLines(dish.steps);
 
   renderEditorPreview();
+  restoreDishDraft(dishId);
   els.dishEditorModal.showModal();
 }
 
@@ -768,6 +893,7 @@ function openNewDishEditor() {
   formField('orderCount').value = '0';
   state.editorImages = [];
   renderEditorPreview();
+  restoreDishDraft('new');
   els.dishEditorModal.showModal();
 }
 
@@ -783,10 +909,14 @@ function fillCategoryOptions() {
 
 function renderAdmin() {
   if (els.brandForm) {
-    els.brandForm.elements.title.value = state.brand.title || '';
-    els.brandForm.elements.subtitle.value = state.brand.subtitle || '';
-    els.brandImagePreview.src = state.brand.image || '';
-    els.brandImagePreview.style.display = state.brand.image ? 'block' : 'none';
+    const brandDraft = loadDraft(DRAFT_BRAND_KEY, null);
+    const title = (brandDraft && brandDraft.title) || state.brand.title || '';
+    const subtitle = (brandDraft && brandDraft.subtitle) || state.brand.subtitle || '';
+    const image = (brandDraft && brandDraft.image) || state.brand.image || '';
+    els.brandForm.elements.title.value = title;
+    els.brandForm.elements.subtitle.value = subtitle;
+    els.brandImagePreview.src = image;
+    els.brandImagePreview.style.display = image ? 'block' : 'none';
   }
   fillCategoryOptions();
   renderAdminCategories();
@@ -856,12 +986,19 @@ els.submitOrderBtn.addEventListener('click', async () => {
 
   state.cart = [];
   els.orderNote.value = '';
+  clearDraft(DRAFT_ORDER_NOTE_KEY);
   localSaveCart();
   els.cartModal.close();
   await refreshDishes();
   await loadOrders();
   render();
   notify('下单成功');
+});
+
+els.orderNote.addEventListener('input', () => {
+  try {
+    localStorage.setItem(DRAFT_ORDER_NOTE_KEY, els.orderNote.value || '');
+  } catch {}
 });
 
 els.kitchenModeBtn.addEventListener('click', () => {
@@ -960,10 +1097,23 @@ els.uploadBrandImageBtn.addEventListener('click', async () => {
   const result = await api('/api/uploads', { method: 'POST', body: fd });
   if (!result.urls || !result.urls.length) return;
   state.brand.image = result.urls[0];
+  saveDraft(DRAFT_BRAND_KEY, {
+    title: els.brandForm.elements.title.value || state.brand.title || '',
+    subtitle: els.brandForm.elements.subtitle.value || state.brand.subtitle || '',
+    image: state.brand.image
+  });
   els.brandImagePreview.src = state.brand.image;
   els.brandImagePreview.style.display = 'block';
   renderBrandHeader();
   els.brandImageUploadInput.value = '';
+});
+
+els.brandForm.addEventListener('input', () => {
+  saveDraft(DRAFT_BRAND_KEY, {
+    title: els.brandForm.elements.title.value || '',
+    subtitle: els.brandForm.elements.subtitle.value || '',
+    image: state.brand.image || ''
+  });
 });
 
 els.brandForm.addEventListener('submit', async (e) => {
@@ -987,6 +1137,7 @@ els.brandForm.addEventListener('submit', async (e) => {
     subtitle: brand.subtitle || subtitle,
     image: brand.image || ''
   };
+  clearDraft(DRAFT_BRAND_KEY);
   renderBrandHeader();
   notify('标题设置已保存');
 });
@@ -1083,12 +1234,32 @@ els.dishForm.addEventListener('submit', async (e) => {
   }
 
   els.dishEditorModal.close();
+  clearDraft(DRAFT_DISH_KEY);
   await loadBootstrap();
   if (state.view === 'kitchen') {
     await refreshDishes();
   }
   render();
   notify('菜品已保存');
+});
+
+els.dishForm.addEventListener('input', () => {
+  saveDishDraft();
+});
+
+els.imagePreviewPrevBtn.addEventListener('click', () => shiftPreview(-1));
+els.imagePreviewNextBtn.addEventListener('click', () => shiftPreview(1));
+
+document.addEventListener('keydown', (e) => {
+  if (!els.imagePreviewModal.open) return;
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    shiftPreview(-1);
+  }
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    shiftPreview(1);
+  }
 });
 
 document.querySelectorAll('.bottom-nav button').forEach((btn) => {

@@ -123,7 +123,9 @@
     <dialog id="dishModal" class="modal">
       <article class="modal-card">
         <button data-close class="close">×</button>
-        <img id="modalImage" alt="菜品图" />
+        <div class="modal-image-stage">
+          <img id="modalImage" alt="菜品图" />
+        </div>
         <div id="modalThumbs" class="thumb-list"></div>
         <h3 id="modalName"></h3>
         <p id="modalDesc"></p>
@@ -203,6 +205,18 @@
           <button type="button" id="aiFillBtn" class="ghost">AI 填写（DeepSeek）</button>
           <button type="submit">保存菜品</button>
         </form>
+      </article>
+    </dialog>
+
+    <dialog id="imagePreviewModal" class="modal image-preview-modal">
+      <article class="image-preview-card">
+        <button data-close class="close image-preview-close">×</button>
+        <button id="imagePreviewPrevBtn" type="button" class="image-nav prev" aria-label="上一张">‹</button>
+        <div class="image-preview-stage">
+          <img id="imagePreviewImage" alt="全屏菜品图" />
+        </div>
+        <button id="imagePreviewNextBtn" type="button" class="image-nav next" aria-label="下一张">›</button>
+        <div id="imagePreviewMeta" class="image-preview-meta"></div>
       </article>
     </dialog>
 
