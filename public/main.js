@@ -1,5 +1,6 @@
 const state = {
   categories: [],
+  allDishes: [],
   dishes: [],
   orders: [],
   spiceLevels: ['不辣', '微辣', '中辣', '特辣'],
@@ -11,7 +12,9 @@ const state = {
   dragCategoryIds: [],
   dragDishIds: [],
   editingDishId: null,
-  modalDishId: null
+  modalDishId: null,
+  aiEnabled: false,
+  editorImages: []
 };
 
 const els = {
@@ -25,8 +28,10 @@ const els = {
   openCartBtn: document.getElementById('openCartBtn'),
   dishModal: document.getElementById('dishModal'),
   cartModal: document.getElementById('cartModal'),
+  orderPlanModal: document.getElementById('orderPlanModal'),
   dishEditorModal: document.getElementById('dishEditorModal'),
   modalImage: document.getElementById('modalImage'),
+  modalThumbs: document.getElementById('modalThumbs'),
   modalName: document.getElementById('modalName'),
   modalDesc: document.getElementById('modalDesc'),
   modalTime: document.getElementById('modalTime'),
@@ -38,6 +43,11 @@ const els = {
   cartItems: document.getElementById('cartItems'),
   submitOrderBtn: document.getElementById('submitOrderBtn'),
   orderNote: document.getElementById('orderNote'),
+  planTitle: document.getElementById('planTitle'),
+  planSummary: document.getElementById('planSummary'),
+  planTotal: document.getElementById('planTotal'),
+  planTimeline: document.getElementById('planTimeline'),
+  planTips: document.getElementById('planTips'),
   ordersList: document.getElementById('ordersList'),
   adminCategoryList: document.getElementById('adminCategoryList'),
   addCategoryForm: document.getElementById('addCategoryForm'),
@@ -47,12 +57,23 @@ const els = {
   newDishBtn: document.getElementById('newDishBtn'),
   dishForm: document.getElementById('dishForm'),
   formCategory: document.getElementById('formCategory'),
-  editorTitle: document.getElementById('editorTitle')
+  editorTitle: document.getElementById('editorTitle'),
+  uploadImageBtn: document.getElementById('uploadImageBtn'),
+  imageUploadInput: document.getElementById('imageUploadInput'),
+  editorImagePreview: document.getElementById('editorImagePreview'),
+  aiFillBtn: document.getElementById('aiFillBtn')
 };
+
+function formField(name) {
+  return els.dishForm.elements.namedItem(name);
+}
 
 function notify(msg) {
   window.alert(msg);
 }
+
+const CATEGORY_ALL = '__all__';
+const CATEGORY_FREQUENT = '__frequent__';
 
 function localSaveCart() {
   localStorage.setItem('gf-order-cart', JSON.stringify(state.cart));
@@ -68,10 +89,11 @@ function localLoadCart() {
 }
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
+  const headers = { ...(options.headers || {}) };
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const response = await fetch(url, { ...options, headers });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.message || '请求失败');
@@ -79,8 +101,15 @@ async function api(url, options = {}) {
   return response.json();
 }
 
+function dishImages(dish) {
+  const list = Array.isArray(dish.images) ? dish.images.filter(Boolean) : [];
+  if (list.length) return list;
+  if (dish.image) return [dish.image];
+  return [`/api/dishes/${dish.id}/placeholder.svg`];
+}
+
 function dishImageUrl(dish) {
-  return dish.image && dish.image.trim() ? dish.image.trim() : `/api/dishes/${dish.id}/placeholder.svg`;
+  return dishImages(dish)[0];
 }
 
 function formatTime(iso) {
@@ -115,17 +144,20 @@ function setView(view) {
 async function loadBootstrap() {
   const data = await api('/api/bootstrap');
   state.categories = data.categories;
+  state.allDishes = data.dishes;
   state.dishes = data.dishes;
   state.spiceLevels = data.spiceLevels;
   state.sortMode = data.settings.kitchenSortMode || 'manual';
+  state.aiEnabled = Boolean(data.aiEnabled);
 
-  if (!state.activeCategoryId || !state.categories.find((c) => c.id === state.activeCategoryId)) {
-    state.activeCategoryId = state.categories[0] ? state.categories[0].id : '';
+  const kitchenIds = [CATEGORY_ALL, CATEGORY_FREQUENT, ...state.categories.map((c) => c.id)];
+  if (!state.activeCategoryId || !kitchenIds.includes(state.activeCategoryId)) {
+    state.activeCategoryId = CATEGORY_ALL;
   }
 
   els.sortMode.value = state.sortMode;
   state.dragCategoryIds = state.categories.map((c) => c.id);
-  state.dragDishIds = state.dishes.map((d) => d.id);
+  state.dragDishIds = state.allDishes.map((d) => d.id);
 }
 
 async function loadOrders() {
@@ -134,19 +166,32 @@ async function loadOrders() {
 
 async function refreshDishes() {
   const params = new URLSearchParams({ sortMode: state.sortMode });
-  if (state.activeCategoryId) params.set('categoryId', state.activeCategoryId);
   if (state.keyword) params.set('keyword', state.keyword);
   const data = await api(`/api/dishes?${params.toString()}`);
-  state.dishes = data.dishes;
+  state.allDishes = data.dishes;
+  if (state.activeCategoryId === CATEGORY_ALL) {
+    state.dishes = [...state.allDishes];
+  } else if (state.activeCategoryId === CATEGORY_FREQUENT) {
+    state.dishes = [...state.allDishes]
+      .filter((dish) => (dish.orderCount || 0) > 0)
+      .sort((a, b) => b.orderCount - a.orderCount || a.name.localeCompare(b.name, 'zh-Hans-CN'));
+  } else {
+    state.dishes = state.allDishes.filter((dish) => dish.categoryId === state.activeCategoryId);
+  }
   state.dragDishIds = data.dishes.map((d) => d.id);
 }
 
 function renderCategoryList() {
   els.categoryList.innerHTML = '';
-  const active = state.categories.find((c) => c.id === state.activeCategoryId);
+  const kitchenCategories = [
+    { id: CATEGORY_ALL, icon: '📋', name: '所有菜' },
+    { id: CATEGORY_FREQUENT, icon: '🔥', name: '常点菜' },
+    ...state.categories
+  ];
+  const active = kitchenCategories.find((c) => c.id === state.activeCategoryId);
   els.activeCategoryTitle.textContent = active ? `${active.icon} ${active.name}` : '菜品';
 
-  state.categories.forEach((cat) => {
+  kitchenCategories.forEach((cat) => {
     const li = document.createElement('li');
     li.className = cat.id === state.activeCategoryId ? 'active' : '';
     li.textContent = `${cat.icon} ${cat.name}`;
@@ -172,7 +217,7 @@ function dishCard(dish) {
   info.innerHTML = `
     <h3>${dish.name}</h3>
     <p class="muted">${dish.description || '暂无介绍'}</p>
-    <p class="tags"><span>${dish.spiceLevel}</span><span>${dish.estimateMinutes}分钟</span><span>点过 ${dish.orderCount} 次</span></p>
+    <p class="tags"><span>${dish.spiceLevel}</span><span>${dish.estimateMinutes}分钟</span><span>点过 ${dish.orderCount} 次</span><span>${dishImages(dish).length}张图</span></p>
   `;
 
   const actions = document.createElement('div');
@@ -205,7 +250,19 @@ function openDishModal(dishId) {
   if (!dish) return;
   state.modalDishId = dish.id;
 
-  els.modalImage.src = dishImageUrl(dish);
+  const images = dishImages(dish);
+  els.modalImage.src = images[0];
+  els.modalThumbs.innerHTML = '';
+  images.forEach((url) => {
+    const t = document.createElement('img');
+    t.src = url;
+    t.alt = dish.name;
+    t.onclick = () => {
+      els.modalImage.src = url;
+    };
+    els.modalThumbs.appendChild(t);
+  });
+
   els.modalName.textContent = dish.name;
   els.modalDesc.textContent = dish.description || '暂无介绍';
   els.modalTime.textContent = String(dish.estimateMinutes || 0);
@@ -355,8 +412,80 @@ function renderOrders() {
       action.appendChild(btn);
     });
 
+    const aiBtn = document.createElement('button');
+    aiBtn.className = 'ghost';
+    aiBtn.textContent = state.aiEnabled ? 'AI 优化出餐' : 'AI 优化出餐（需配置 Key）';
+    aiBtn.disabled = !state.aiEnabled;
+    aiBtn.onclick = async () => {
+      aiBtn.disabled = true;
+      aiBtn.textContent = '生成中...';
+      try {
+        await api(`/api/orders/${order.id}/optimize`, { method: 'POST' });
+        await loadOrders();
+        renderOrders();
+        const latest = state.orders.find((it) => it.id === order.id);
+        if (latest && latest.kitchenPlan) {
+          openOrderPlanModal(latest);
+        }
+      } catch (err) {
+        notify(err.message);
+      } finally {
+        aiBtn.disabled = !state.aiEnabled;
+        aiBtn.textContent = state.aiEnabled ? 'AI 优化出餐' : 'AI 优化出餐（需配置 Key）';
+      }
+    };
+    action.appendChild(aiBtn);
+
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'ghost';
+    viewBtn.textContent = order.kitchenPlan ? '查看优化方案' : '暂无优化方案';
+    viewBtn.disabled = !order.kitchenPlan;
+    viewBtn.onclick = () => openOrderPlanModal(order);
+    action.appendChild(viewBtn);
+
     els.ordersList.appendChild(card);
   });
+}
+
+function openOrderPlanModal(order) {
+  if (!order || !order.kitchenPlan) return;
+  const plan = order.kitchenPlan;
+  els.planTitle.textContent = `AI 出餐优化方案（订单 ${order.id.slice(-6)}）`;
+  els.planSummary.textContent = plan.summary || '已生成整体出餐优化流程';
+  els.planTotal.textContent = String(plan.totalMinutes || 0);
+
+  els.planTimeline.innerHTML = '';
+  (plan.timeline || []).forEach((item) => {
+    const node = document.createElement('article');
+    node.className = 'timeline-item';
+    const actions = (item.actions || []).map((s) => `<li>${s}</li>`).join('');
+    const parallel = (item.parallel || []).map((s) => `<li>${s}</li>`).join('');
+    node.innerHTML = `
+      <div class="timeline-time">T+${item.minute} 分钟</div>
+      <div class="timeline-body">
+        <h4>${item.phase || '流程'}</h4>
+        <ul>${actions || '<li>无</li>'}</ul>
+        ${parallel ? `<p class="muted">可并行：</p><ul>${parallel}</ul>` : ''}
+      </div>
+    `;
+    els.planTimeline.appendChild(node);
+  });
+
+  els.planTips.innerHTML = '';
+  const tips = plan.tips || [];
+  if (!tips.length) {
+    const li = document.createElement('li');
+    li.textContent = '暂无';
+    els.planTips.appendChild(li);
+  } else {
+    tips.forEach((tip) => {
+      const li = document.createElement('li');
+      li.textContent = tip;
+      els.planTips.appendChild(li);
+    });
+  }
+
+  els.orderPlanModal.showModal();
 }
 
 function makeDraggableList(listEl, ids, onChange) {
@@ -436,18 +565,29 @@ function renderAdminCategories() {
 function renderAdminDishOrder() {
   els.adminDishOrderList.innerHTML = '';
   state.dragDishIds.forEach((id) => {
-    const dish = state.dishes.find((d) => d.id === id) || null;
+    const dish = state.allDishes.find((d) => d.id === id) || null;
     if (!dish) return;
     const category = state.categories.find((c) => c.id === dish.categoryId);
     const li = document.createElement('li');
     li.dataset.id = dish.id;
     li.innerHTML = `
-      <span>↕ ${dish.name} <small class="muted">${category ? category.name : ''}</small></span>
+      <span class="dish-mini">
+        <img src="${dishImageUrl(dish)}" alt="${dish.name}" />
+        <span>↕ ${dish.name} <small class="muted">${category ? category.name : ''}</small></span>
+      </span>
       <div class="inline">
         <button class="ghost">编辑</button>
+        <button class="danger">删</button>
       </div>
     `;
-    li.querySelector('button').onclick = () => openDishEditor(dish.id);
+    const [editBtn, delBtn] = li.querySelectorAll('button');
+    editBtn.onclick = () => openDishEditor(dish.id);
+    delBtn.onclick = async () => {
+      if (!window.confirm(`确认删除菜品 ${dish.name}？`)) return;
+      await api(`/api/dishes/${dish.id}`, { method: 'DELETE' });
+      await loadBootstrap();
+      render();
+    };
     els.adminDishOrderList.appendChild(li);
   });
 
@@ -468,24 +608,62 @@ function linesToList(str) {
     .filter(Boolean);
 }
 
+function renderEditorPreview() {
+  els.editorImagePreview.innerHTML = '';
+  state.editorImages.forEach((url, index) => {
+    const box = document.createElement('div');
+    box.className = 'editor-image-item';
+    box.draggable = true;
+    box.dataset.index = String(index);
+    box.innerHTML = `
+      <img src="${url}" alt="预览" />
+      <button type="button" class="img-remove">×</button>
+    `;
+
+    box.querySelector('.img-remove').onclick = () => {
+      state.editorImages = state.editorImages.filter((_, i) => i !== index);
+      renderEditorPreview();
+    };
+
+    box.ondragstart = (e) => {
+      e.dataTransfer.setData('text/plain', String(index));
+    };
+    box.ondragover = (e) => e.preventDefault();
+    box.ondrop = (e) => {
+      e.preventDefault();
+      const from = Number(e.dataTransfer.getData('text/plain'));
+      const to = index;
+      if (!Number.isInteger(from) || from === to) return;
+      const arr = [...state.editorImages];
+      const [moved] = arr.splice(from, 1);
+      arr.splice(to, 0, moved);
+      state.editorImages = arr;
+      renderEditorPreview();
+    };
+
+    els.editorImagePreview.appendChild(box);
+  });
+}
+
 function openDishEditor(dishId) {
-  const dish = state.dishes.find((d) => d.id === dishId);
+  const dish = state.allDishes.find((d) => d.id === dishId);
   if (!dish) return;
   state.editingDishId = dishId;
   els.editorTitle.textContent = `编辑菜品：${dish.name}`;
 
-  els.dishForm.id.value = dish.id;
-  els.dishForm.name.value = dish.name;
-  els.dishForm.categoryId.value = dish.categoryId;
-  els.dishForm.image.value = dish.image || '';
-  els.dishForm.spiceLevel.value = dish.spiceLevel;
-  els.dishForm.estimateMinutes.value = String(dish.estimateMinutes || 15);
-  els.dishForm.orderCount.value = String(dish.orderCount || 0);
-  els.dishForm.description.value = dish.description || '';
-  els.dishForm.ingredients.value = listToLines(dish.ingredients);
-  els.dishForm.seasonings.value = listToLines(dish.seasonings);
-  els.dishForm.steps.value = listToLines(dish.steps);
+  formField('id').value = dish.id;
+  formField('name').value = dish.name;
+  formField('categoryId').value = dish.categoryId;
+  state.editorImages = dishImages(dish);
+  formField('spiceLevel').value = dish.spiceLevel;
+  formField('estimateMinutes').value = String(dish.estimateMinutes || 15);
+  formField('orderCount').value = String(dish.orderCount || 0);
+  formField('description').value = dish.description || '';
+  formField('ingredients').value = listToLines(dish.ingredients);
+  formField('seasonings').value = listToLines(dish.seasonings);
+  formField('steps').value = listToLines(dish.steps);
 
+  renderEditorPreview();
   els.dishEditorModal.showModal();
 }
 
@@ -493,13 +671,15 @@ function openNewDishEditor() {
   state.editingDishId = null;
   els.editorTitle.textContent = '新增菜品';
   els.dishForm.reset();
-  els.dishForm.id.value = '';
+  formField('id').value = '';
   if (state.categories[0]) {
-    els.dishForm.categoryId.value = state.categories[0].id;
+    formField('categoryId').value = state.categories[0].id;
   }
-  els.dishForm.spiceLevel.value = '微辣';
-  els.dishForm.estimateMinutes.value = '15';
-  els.dishForm.orderCount.value = '0';
+  formField('spiceLevel').value = '微辣';
+  formField('estimateMinutes').value = '15';
+  formField('orderCount').value = '0';
+  state.editorImages = [];
+  renderEditorPreview();
   els.dishEditorModal.showModal();
 }
 
@@ -517,6 +697,12 @@ function renderAdmin() {
   fillCategoryOptions();
   renderAdminCategories();
   renderAdminDishOrder();
+  els.aiFillBtn.disabled = !state.aiEnabled;
+  if (!state.aiEnabled) {
+    els.aiFillBtn.textContent = 'AI 填写（需配置 DEEPSEEK_API_KEY）';
+  } else {
+    els.aiFillBtn.textContent = 'AI 填写（DeepSeek）';
+  }
 }
 
 function render() {
@@ -634,6 +820,65 @@ els.newDishBtn.addEventListener('click', () => {
   openNewDishEditor();
 });
 
+els.uploadImageBtn.addEventListener('click', async () => {
+  const files = els.imageUploadInput.files;
+  if (!files || !files.length) {
+    notify('请先选择图片');
+    return;
+  }
+  const fd = new FormData();
+  Array.from(files).forEach((file) => fd.append('images', file));
+
+  const result = await api('/api/uploads', {
+    method: 'POST',
+    body: fd
+  });
+
+  const merged = [...state.editorImages, ...result.urls];
+  state.editorImages = [...new Set(merged)];
+  els.imageUploadInput.value = '';
+  renderEditorPreview();
+});
+
+els.aiFillBtn.addEventListener('click', async () => {
+  const name = String(formField('name').value || '').trim();
+  if (!name) {
+    notify('请先填写菜名再用 AI');
+    return;
+  }
+  const categoryId = String(formField('categoryId').value || '').trim();
+  const category = state.categories.find((c) => c.id === categoryId);
+
+  els.aiFillBtn.disabled = true;
+  const origin = els.aiFillBtn.textContent;
+  els.aiFillBtn.textContent = 'AI 生成中...';
+
+  try {
+    const result = await api('/api/ai/fill-dish', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        spiceLevel: String(formField('spiceLevel').value || '微辣'),
+        categoryName: category ? category.name : ''
+      })
+    });
+
+    const data = result.data;
+    formField('description').value = data.description || '';
+    formField('estimateMinutes').value = String(data.estimateMinutes || 15);
+    if (data.spiceLevel) formField('spiceLevel').value = data.spiceLevel;
+    formField('ingredients').value = listToLines(data.ingredients || []);
+    formField('seasonings').value = listToLines(data.seasonings || []);
+    formField('steps').value = listToLines(data.steps || []);
+    notify('AI 已完成填充');
+  } catch (err) {
+    notify(err.message);
+  } finally {
+    els.aiFillBtn.disabled = !state.aiEnabled;
+    els.aiFillBtn.textContent = origin;
+  }
+});
+
 els.dishForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = new FormData(els.dishForm);
@@ -641,7 +886,7 @@ els.dishForm.addEventListener('submit', async (e) => {
   const payload = {
     name: String(form.get('name') || '').trim(),
     categoryId: String(form.get('categoryId') || '').trim(),
-    image: String(form.get('image') || '').trim(),
+    images: state.editorImages,
     spiceLevel: String(form.get('spiceLevel') || '微辣').trim(),
     estimateMinutes: Number(form.get('estimateMinutes') || 15),
     orderCount: Number(form.get('orderCount') || 0),

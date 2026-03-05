@@ -88,6 +88,7 @@
       <article class="modal-card">
         <button data-close class="close">×</button>
         <img id="modalImage" alt="菜品图" />
+        <div id="modalThumbs" class="thumb-list"></div>
         <h3 id="modalName"></h3>
         <p id="modalDesc"></p>
         <p><strong>预计时间：</strong><span id="modalTime"></span> 分钟</p>
@@ -121,6 +122,20 @@
       </article>
     </dialog>
 
+    <dialog id="orderPlanModal" class="modal">
+      <article class="modal-card">
+        <button data-close class="close">×</button>
+        <h3 id="planTitle">AI 出餐优化方案</h3>
+        <p id="planSummary" class="muted"></p>
+        <p><strong>预计整单时长：</strong><span id="planTotal"></span> 分钟</p>
+        <div id="planTimeline" class="timeline"></div>
+        <section>
+          <h4>提速建议</h4>
+          <ul id="planTips"></ul>
+        </section>
+      </article>
+    </dialog>
+
     <dialog id="dishEditorModal" class="modal">
       <article class="modal-card">
         <button data-close class="close">×</button>
@@ -129,7 +144,12 @@
           <input type="hidden" name="id" />
           <label>菜名<input name="name" required /></label>
           <label>分类<select name="categoryId" id="formCategory"></select></label>
-          <label>图片 URL<input name="image" placeholder="留空使用默认图" /></label>
+          <div class="full upload-box">
+            <label>上传图片到本地（可多选）<input id="imageUploadInput" type="file" accept="image/*" multiple /></label>
+            <button type="button" id="uploadImageBtn" class="ghost">上传并追加到图片列表</button>
+            <p class="muted">拖拽小图可排序，点右上角 X 删除图片</p>
+            <div id="editorImagePreview" class="thumb-list"></div>
+          </div>
           <label>辣度
             <select name="spiceLevel">
               <option value="不辣">不辣</option>
@@ -144,6 +164,7 @@
           <label class="full">食材（每行一条）<textarea name="ingredients" rows="4"></textarea></label>
           <label class="full">配料（每行一条）<textarea name="seasonings" rows="4"></textarea></label>
           <label class="full">制作流程（每行一步）<textarea name="steps" rows="5"></textarea></label>
+          <button type="button" id="aiFillBtn" class="ghost">AI 填写（DeepSeek）</button>
           <button type="submit">保存菜品</button>
         </form>
       </article>
