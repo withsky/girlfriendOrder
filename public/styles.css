@@ -1,0 +1,177 @@
+:root {
+  --bg: #f5f3ea;
+  --card: #fffdf7;
+  --text: #1f2a2e;
+  --muted: #576267;
+  --brand: #3a7d44;
+  --brand-soft: #dcefdc;
+  --line: #e4dfd0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Noto Sans SC", sans-serif;
+  background: radial-gradient(circle at top right, #fbf6e5 0%, var(--bg) 48%, #eef5ed 100%);
+  color: var(--text);
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 14px 28px;
+}
+
+.topbar h1 {
+  margin: 6px 0 4px;
+  font-size: 30px;
+}
+
+.topbar p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  margin-top: 12px;
+  box-shadow: 0 4px 16px rgba(49, 63, 54, 0.06);
+}
+
+.controls label,
+.inline label {
+  display: inline-block;
+  font-weight: 600;
+}
+
+select,
+input,
+button,
+.detail-link {
+  border-radius: 10px;
+  border: 1px solid #c8cebe;
+  padding: 8px 10px;
+  font-size: 15px;
+}
+
+select,
+input {
+  background: #fff;
+}
+
+button {
+  background: #fff;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.tip {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.list {
+  margin-top: 10px;
+}
+
+.dish-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.dish-name {
+  margin: 0;
+  font-size: 21px;
+}
+
+.dish-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.detail-link {
+  text-decoration: none;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-color: #b8d8bd;
+  white-space: nowrap;
+}
+
+.actions {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.order-btn {
+  width: 100%;
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+  font-weight: 700;
+}
+
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.count-input {
+  width: 82px;
+  text-align: center;
+}
+
+.move-btn,
+.count-btn {
+  min-width: 50px;
+}
+
+.back {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.detail h2 {
+  margin: 0 0 8px;
+}
+
+.detail ul,
+.detail ol {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+
+.error {
+  color: #b70000;
+}
+
+@media (max-width: 520px) {
+  .topbar h1 {
+    font-size: 25px;
+  }
+
+  select,
+  input,
+  button,
+  .detail-link {
+    width: auto;
+    font-size: 14px;
+  }
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>女朋友点菜</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <h1>今晚吃什么</h1>
+        <p>给女朋友的点菜本</p>
+      </header>
+
+      <section class="controls card">
+        <label for="sortMode">排序方式</label>
+        <select id="sortMode">
+          <option value="manual">手动排序</option>
+          <option value="name">自动：按菜名字母</option>
+          <option value="count">自动：按点菜次数</option>
+        </select>
+        <p class="tip">手动排序模式下可使用上移/下移按钮调整。</p>
+      </section>
+
+      <section id="dishList" class="list"></section>
+    </main>
+
+    <template id="dishCardTemplate">
+      <article class="dish card">
+        <div class="dish-main">
+          <div>
+            <h2 class="dish-name"></h2>
+            <p class="dish-meta"></p>
+          </div>
+          <a class="detail-link">详情</a>
+        </div>
+
+        <div class="actions">
+          <button class="order-btn">点这道菜 +1</button>
+          <div class="inline">
+            <label>辣度</label>
+            <select class="spice-select">
+              <option value="不辣">不辣</option>
+              <option value="微辣">微辣</option>
+              <option value="中辣">中辣</option>
+              <option value="特辣">特辣</option>
+            </select>
+          </div>
+          <div class="inline">
+            <label>次数</label>
+            <button class="count-btn minus">-</button>
+            <input class="count-input" type="number" min="0" />
+            <button class="count-btn plus">+</button>
+          </div>
+          <div class="inline manual-only">
+            <button class="move-btn up">上移</button>
+            <button class="move-btn down">下移</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="/main.js"></script>
+  </body>
+</html>
