@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const sharp = require('sharp');
 const defaultData = require('./data/defaultData');
 
 const app = express();
@@ -19,7 +20,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-const storage = multer.diskStorage({
+const imageStorage = multer.diskStorage({
   destination: (_, __, cb) => {
     const folder = path.join(UPLOAD_DIR, new Date().toISOString().slice(0, 10));
     fs.mkdirSync(folder, { recursive: true });
@@ -31,9 +32,14 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024, files: 8 }
+const uploadImages = multer({
+  storage: imageStorage,
+  limits: { fileSize: 35 * 1024 * 1024, files: 20 }
+});
+
+const uploadDb = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 30 * 1024 * 1024, files: 1 }
 });
 
 function nowIso() {
@@ -79,6 +85,19 @@ function normalizeDishOrder(dishes) {
     });
 }
 
+function recomputeDishOrderCount(db) {
+  const counter = new Map();
+  (db.orders || []).forEach((order) => {
+    (order.items || []).forEach((item) => {
+      const qty = Number.isFinite(item.qty) ? Math.max(0, Math.floor(item.qty)) : 0;
+      counter.set(item.dishId, (counter.get(item.dishId) || 0) + qty);
+    });
+  });
+  (db.dishes || []).forEach((dish) => {
+    dish.orderCount = counter.get(dish.id) || 0;
+  });
+}
+
 function migrateDb(raw) {
   const db = raw && typeof raw === 'object' ? raw : {};
   const fallbackById = new Map(defaultData.dishes.map((d) => [d.id, d]));
@@ -114,6 +133,11 @@ function migrateDb(raw) {
     kitchenSortMode: ['manual', 'name', 'count'].includes(db.settings && db.settings.kitchenSortMode)
       ? db.settings.kitchenSortMode
       : defaultData.settings.kitchenSortMode,
+    brand: {
+      title: String((db.settings && db.settings.brand && db.settings.brand.title) || defaultData.settings.brand.title || '宝宝餐厅').trim(),
+      subtitle: String((db.settings && db.settings.brand && db.settings.brand.subtitle) || defaultData.settings.brand.subtitle || '').trim(),
+      image: String((db.settings && db.settings.brand && db.settings.brand.image) || defaultData.settings.brand.image || '').trim()
+    },
     updatedAt: nowIso()
   };
 
@@ -141,7 +165,10 @@ function migrateDb(raw) {
     dish.image = dish.images[0] || '';
   });
 
-  return { categories, dishes, orders, settings };
+  const tempDb = { categories, dishes, orders, settings };
+  recomputeDishOrderCount(tempDb);
+
+  return tempDb;
 }
 
 function ensureDb() {
@@ -341,16 +368,77 @@ app.get('/api/bootstrap', (req, res) => {
   });
 });
 
-app.post('/api/uploads', upload.array('images', 8), (req, res) => {
+app.post('/api/uploads', uploadImages.array('images', 20), async (req, res) => {
   const files = Array.isArray(req.files) ? req.files : [];
   if (!files.length) {
     return res.status(400).json({ message: '未上传文件' });
   }
-  const urls = files.map((file) => {
-    const relative = path.relative(PUBLIC_DIR, file.path).split(path.sep).join('/');
-    return `/${relative}`;
-  });
-  return res.json({ urls });
+
+  try {
+    const results = [];
+    for (const file of files) {
+      const dir = path.dirname(file.path);
+      const ext = path.extname(file.path).toLowerCase();
+      const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.avif', '.heic', '.heif'].includes(ext);
+      if (!isImage) {
+        fs.unlink(file.path, () => {});
+        continue;
+      }
+
+      const baseName = path.basename(file.path, ext);
+      const originalPath = path.join(dir, `${baseName}__orig.webp`);
+      const thumbPath = path.join(dir, `${baseName}__thumb.webp`);
+
+      await sharp(file.path)
+        .rotate()
+        .resize({ width: 1920, withoutEnlargement: true })
+        .webp({ quality: 86 })
+        .toFile(originalPath);
+
+      await sharp(file.path)
+        .rotate()
+        .resize({ width: 420, height: 420, fit: 'cover' })
+        .webp({ quality: 78 })
+        .toFile(thumbPath);
+
+      fs.unlink(file.path, () => {});
+
+      const relativeOriginal = path.relative(PUBLIC_DIR, originalPath).split(path.sep).join('/');
+      results.push(`/${relativeOriginal}`);
+    }
+
+    if (!results.length) {
+      return res.status(400).json({ message: '未检测到可处理的图片格式' });
+    }
+    return res.json({ urls: results });
+  } catch (error) {
+    return res.status(400).json({ message: `图片处理失败: ${error.message}` });
+  }
+});
+
+app.get('/api/admin/export-db', (req, res) => {
+  ensureDb();
+  const fileName = `girlfriend-order-db-${new Date().toISOString().slice(0, 10)}.json`;
+  res.download(DB_FILE, fileName);
+});
+
+app.post('/api/admin/import-db', uploadDb.single('db'), (req, res) => {
+  if (!req.file) return res.status(400).json({ message: '未上传 db.json 文件' });
+
+  try {
+    const text = req.file.buffer.toString('utf-8');
+    const raw = JSON.parse(text);
+    const migrated = migrateDb(raw);
+    writeDb(migrated);
+    return res.json({
+      ok: true,
+      dishes: migrated.dishes.length,
+      categories: migrated.categories.length,
+      orders: migrated.orders.length
+    });
+  } catch (error) {
+    return res.status(400).json({ message: `导入失败: ${error.message}` });
+  }
 });
 
 app.post('/api/ai/fill-dish', async (req, res) => {
@@ -563,6 +651,26 @@ app.post('/api/settings/sort-mode', (req, res) => {
   return res.json({ kitchenSortMode: mode });
 });
 
+app.patch('/api/settings/brand', (req, res) => {
+  const db = readDb();
+  if (!db.settings.brand || typeof db.settings.brand !== 'object') {
+    db.settings.brand = { title: '宝宝餐厅', subtitle: '', image: '' };
+  }
+
+  if (typeof req.body.title === 'string' && req.body.title.trim()) {
+    db.settings.brand.title = req.body.title.trim();
+  }
+  if (typeof req.body.subtitle === 'string') {
+    db.settings.brand.subtitle = req.body.subtitle.trim();
+  }
+  if (typeof req.body.image === 'string') {
+    db.settings.brand.image = req.body.image.trim();
+  }
+
+  writeDb(db);
+  return res.json(db.settings.brand);
+});
+
 app.get('/api/orders', (_, res) => {
   const db = readDb();
   const list = [...db.orders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -589,7 +697,6 @@ app.post('/api/orders', (req, res) => {
       estimateMinutes: dish.estimateMinutes,
       image: (dish.images && dish.images[0]) || dish.image || ''
     });
-    dish.orderCount += qty;
   }
 
   if (!normalizedItems.length) return res.status(400).json({ message: '有效菜品为空，无法下单' });
@@ -605,6 +712,7 @@ app.post('/api/orders', (req, res) => {
   };
 
   db.orders.push(order);
+  recomputeDishOrderCount(db);
   writeDb(db);
   return res.json(order);
 });
@@ -619,6 +727,16 @@ app.patch('/api/orders/:id', (req, res) => {
   order.updatedAt = nowIso();
   writeDb(db);
   return res.json(order);
+});
+
+app.delete('/api/orders/:id', (req, res) => {
+  const db = readDb();
+  const before = db.orders.length;
+  db.orders = db.orders.filter((item) => item.id !== req.params.id);
+  if (db.orders.length === before) return res.status(404).json({ message: '订单不存在' });
+  recomputeDishOrderCount(db);
+  writeDb(db);
+  return res.json({ ok: true });
 });
 
 app.post('/api/orders/:id/optimize', async (req, res) => {

@@ -14,11 +14,22 @@ const state = {
   editingDishId: null,
   modalDishId: null,
   aiEnabled: false,
-  editorImages: []
+  editorImages: [],
+  orderFilter: 'all',
+  kitchenMode: false,
+  brand: {
+    title: '宝宝餐厅',
+    subtitle: '',
+    image: ''
+  }
 };
 
 const els = {
   searchInput: document.getElementById('searchInput'),
+  brandImage: document.getElementById('brandImage'),
+  brandEmoji: document.getElementById('brandEmoji'),
+  brandTitle: document.getElementById('brandTitle'),
+  brandSubtitle: document.getElementById('brandSubtitle'),
   sortMode: document.getElementById('sortMode'),
   categoryList: document.getElementById('categoryList'),
   activeCategoryTitle: document.getElementById('activeCategoryTitle'),
@@ -49,6 +60,8 @@ const els = {
   planTimeline: document.getElementById('planTimeline'),
   planTips: document.getElementById('planTips'),
   ordersList: document.getElementById('ordersList'),
+  orderFilterBar: document.getElementById('orderFilterBar'),
+  kitchenModeBtn: document.getElementById('kitchenModeBtn'),
   adminCategoryList: document.getElementById('adminCategoryList'),
   addCategoryForm: document.getElementById('addCategoryForm'),
   saveCategoryOrderBtn: document.getElementById('saveCategoryOrderBtn'),
@@ -62,6 +75,14 @@ const els = {
   imageUploadInput: document.getElementById('imageUploadInput'),
   editorImagePreview: document.getElementById('editorImagePreview'),
   aiFillBtn: document.getElementById('aiFillBtn')
+  ,
+  brandForm: document.getElementById('brandForm'),
+  brandImageUploadInput: document.getElementById('brandImageUploadInput'),
+  uploadBrandImageBtn: document.getElementById('uploadBrandImageBtn'),
+  brandImagePreview: document.getElementById('brandImagePreview'),
+  exportDbBtn: document.getElementById('exportDbBtn'),
+  importDbInput: document.getElementById('importDbInput'),
+  importDbBtn: document.getElementById('importDbBtn')
 };
 
 function formField(name) {
@@ -108,8 +129,16 @@ function dishImages(dish) {
   return [`/api/dishes/${dish.id}/placeholder.svg`];
 }
 
+function toThumbUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return raw;
+  if (raw.endsWith('__orig.webp')) return raw.replace('__orig.webp', '__thumb.webp');
+  return raw;
+}
+
 function dishImageUrl(dish) {
-  return dishImages(dish)[0];
+  const first = dishImages(dish)[0];
+  return toThumbUrl(first);
 }
 
 function formatTime(iso) {
@@ -148,6 +177,11 @@ async function loadBootstrap() {
   state.dishes = data.dishes;
   state.spiceLevels = data.spiceLevels;
   state.sortMode = data.settings.kitchenSortMode || 'manual';
+  state.brand = {
+    title: (data.settings.brand && data.settings.brand.title) || '宝宝餐厅',
+    subtitle: (data.settings.brand && data.settings.brand.subtitle) || '',
+    image: (data.settings.brand && data.settings.brand.image) || ''
+  };
   state.aiEnabled = Boolean(data.aiEnabled);
 
   const kitchenIds = [CATEGORY_ALL, CATEGORY_FREQUENT, ...state.categories.map((c) => c.id)];
@@ -158,6 +192,21 @@ async function loadBootstrap() {
   els.sortMode.value = state.sortMode;
   state.dragCategoryIds = state.categories.map((c) => c.id);
   state.dragDishIds = state.allDishes.map((d) => d.id);
+}
+
+function renderBrandHeader() {
+  els.brandTitle.textContent = state.brand.title || '宝宝餐厅';
+  els.brandSubtitle.textContent = state.brand.subtitle || '';
+  document.title = state.brand.title || '宝宝餐厅';
+  if (state.brand.image) {
+    els.brandImage.src = state.brand.image;
+    els.brandImage.style.display = 'block';
+    els.brandEmoji.style.display = 'none';
+  } else {
+    els.brandImage.removeAttribute('src');
+    els.brandImage.style.display = 'none';
+    els.brandEmoji.style.display = 'grid';
+  }
 }
 
 async function loadOrders() {
@@ -207,10 +256,12 @@ function renderCategoryList() {
 function dishCard(dish) {
   const card = document.createElement('article');
   card.className = 'dish-card';
+  card.onclick = () => openDishModal(dish.id);
 
   const img = document.createElement('img');
   img.src = dishImageUrl(dish);
   img.alt = dish.name;
+  img.loading = 'lazy';
 
   const info = document.createElement('div');
   info.className = 'dish-info';
@@ -222,16 +273,16 @@ function dishCard(dish) {
 
   const actions = document.createElement('div');
   actions.className = 'dish-actions';
-  const detailBtn = document.createElement('button');
-  detailBtn.className = 'ghost';
-  detailBtn.textContent = '详情';
-  detailBtn.onclick = () => openDishModal(dish.id);
-
   const addBtn = document.createElement('button');
-  addBtn.textContent = '加入菜单';
-  addBtn.onclick = () => addToCart(dish.id, dish.spiceLevel, 1);
+  addBtn.className = 'plus-btn';
+  addBtn.textContent = '+';
+  addBtn.title = '加入菜单';
+  addBtn.onclick = (e) => {
+    e.stopPropagation();
+    addToCart(dish.id, dish.spiceLevel, 1);
+  };
 
-  actions.append(detailBtn, addBtn);
+  actions.append(addBtn);
   card.append(img, info, actions);
   return card;
 }
@@ -255,7 +306,7 @@ function openDishModal(dishId) {
   els.modalThumbs.innerHTML = '';
   images.forEach((url) => {
     const t = document.createElement('img');
-    t.src = url;
+    t.src = toThumbUrl(url);
     t.alt = dish.name;
     t.onclick = () => {
       els.modalImage.src = url;
@@ -373,13 +424,38 @@ function renderCartModal() {
 }
 
 function renderOrders() {
+  const chips = [
+    { id: 'all', label: '全部' },
+    { id: 'pending', label: '待处理' },
+    { id: 'cooking', label: '制作中' },
+    { id: 'done', label: '已完成' }
+  ];
+  els.orderFilterBar.innerHTML = '';
+  chips.forEach((chip) => {
+    const btn = document.createElement('button');
+    btn.className = `chip ${state.orderFilter === chip.id ? 'active' : ''}`;
+    btn.textContent = chip.label;
+    btn.onclick = () => {
+      state.orderFilter = chip.id;
+      renderOrders();
+    };
+    els.orderFilterBar.appendChild(btn);
+  });
+  els.kitchenModeBtn.textContent = `厨房模式：${state.kitchenMode ? '开' : '关'}`;
+  document.getElementById('ordersView').classList.toggle('kitchen-mode', state.kitchenMode);
+
   els.ordersList.innerHTML = '';
-  if (!state.orders.length) {
+  let list = [...state.orders];
+  if (state.orderFilter === 'pending') list = list.filter((o) => o.status === 'pending');
+  if (state.orderFilter === 'cooking') list = list.filter((o) => o.status === 'cooking');
+  if (state.orderFilter === 'done') list = list.filter((o) => ['ready', 'served'].includes(o.status));
+
+  if (!list.length) {
     els.ordersList.innerHTML = '<p class="muted">暂时没有订单</p>';
     return;
   }
 
-  state.orders.forEach((order) => {
+  list.forEach((order) => {
     const card = document.createElement('article');
     card.className = 'order-card';
 
@@ -442,6 +518,18 @@ function renderOrders() {
     viewBtn.disabled = !order.kitchenPlan;
     viewBtn.onclick = () => openOrderPlanModal(order);
     action.appendChild(viewBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'danger';
+    delBtn.textContent = '删除订单';
+    delBtn.onclick = async () => {
+      if (!window.confirm('确认删除此订单？会重新计算菜品点单次数。')) return;
+      await api(`/api/orders/${order.id}`, { method: 'DELETE' });
+      await refreshDishes();
+      await loadOrders();
+      render();
+    };
+    action.appendChild(delBtn);
 
     els.ordersList.appendChild(card);
   });
@@ -572,7 +660,7 @@ function renderAdminDishOrder() {
     li.dataset.id = dish.id;
     li.innerHTML = `
       <span class="dish-mini">
-        <img src="${dishImageUrl(dish)}" alt="${dish.name}" />
+        <img src="${dishImageUrl(dish)}" alt="${dish.name}" loading="lazy" />
         <span>↕ ${dish.name} <small class="muted">${category ? category.name : ''}</small></span>
       </span>
       <div class="inline">
@@ -616,7 +704,7 @@ function renderEditorPreview() {
     box.draggable = true;
     box.dataset.index = String(index);
     box.innerHTML = `
-      <img src="${url}" alt="预览" />
+      <img src="${toThumbUrl(url)}" alt="预览" />
       <button type="button" class="img-remove">×</button>
     `;
 
@@ -694,6 +782,12 @@ function fillCategoryOptions() {
 }
 
 function renderAdmin() {
+  if (els.brandForm) {
+    els.brandForm.elements.title.value = state.brand.title || '';
+    els.brandForm.elements.subtitle.value = state.brand.subtitle || '';
+    els.brandImagePreview.src = state.brand.image || '';
+    els.brandImagePreview.style.display = state.brand.image ? 'block' : 'none';
+  }
   fillCategoryOptions();
   renderAdminCategories();
   renderAdminDishOrder();
@@ -706,6 +800,7 @@ function renderAdmin() {
 }
 
 function render() {
+  renderBrandHeader();
   renderCategoryList();
   renderDishes();
   renderCartBar();
@@ -769,6 +864,11 @@ els.submitOrderBtn.addEventListener('click', async () => {
   notify('下单成功');
 });
 
+els.kitchenModeBtn.addEventListener('click', () => {
+  state.kitchenMode = !state.kitchenMode;
+  renderOrders();
+});
+
 els.addCategoryForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = new FormData(els.addCategoryForm);
@@ -826,18 +926,90 @@ els.uploadImageBtn.addEventListener('click', async () => {
     notify('请先选择图片');
     return;
   }
+  els.uploadImageBtn.disabled = true;
+  const oldText = els.uploadImageBtn.textContent;
+  els.uploadImageBtn.textContent = '上传处理中...';
   const fd = new FormData();
   Array.from(files).forEach((file) => fd.append('images', file));
+  try {
+    const result = await api('/api/uploads', {
+      method: 'POST',
+      body: fd
+    });
 
-  const result = await api('/api/uploads', {
-    method: 'POST',
-    body: fd
+    const merged = [...state.editorImages, ...result.urls];
+    state.editorImages = [...new Set(merged)];
+    els.imageUploadInput.value = '';
+    renderEditorPreview();
+  } catch (err) {
+    notify(err.message);
+  } finally {
+    els.uploadImageBtn.disabled = false;
+    els.uploadImageBtn.textContent = oldText;
+  }
+});
+
+els.uploadBrandImageBtn.addEventListener('click', async () => {
+  const file = els.brandImageUploadInput.files && els.brandImageUploadInput.files[0];
+  if (!file) {
+    notify('请先选择标题图片');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('images', file);
+  const result = await api('/api/uploads', { method: 'POST', body: fd });
+  if (!result.urls || !result.urls.length) return;
+  state.brand.image = result.urls[0];
+  els.brandImagePreview.src = state.brand.image;
+  els.brandImagePreview.style.display = 'block';
+  renderBrandHeader();
+  els.brandImageUploadInput.value = '';
+});
+
+els.brandForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = String(els.brandForm.elements.title.value || '').trim();
+  if (!title) {
+    notify('标题不能为空');
+    return;
+  }
+  const subtitle = String(els.brandForm.elements.subtitle.value || '').trim();
+  const brand = await api('/api/settings/brand', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      title,
+      subtitle,
+      image: state.brand.image || ''
+    })
   });
+  state.brand = {
+    title: brand.title || title,
+    subtitle: brand.subtitle || subtitle,
+    image: brand.image || ''
+  };
+  renderBrandHeader();
+  notify('标题设置已保存');
+});
 
-  const merged = [...state.editorImages, ...result.urls];
-  state.editorImages = [...new Set(merged)];
-  els.imageUploadInput.value = '';
-  renderEditorPreview();
+els.exportDbBtn.addEventListener('click', () => {
+  window.location.href = '/api/admin/export-db';
+});
+
+els.importDbBtn.addEventListener('click', async () => {
+  const file = els.importDbInput.files && els.importDbInput.files[0];
+  if (!file) {
+    notify('请先选择 db.json 文件');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('db', file);
+  const result = await api('/api/admin/import-db', { method: 'POST', body: fd });
+  await loadBootstrap();
+  await refreshDishes();
+  await loadOrders();
+  render();
+  notify(`导入成功：${result.categories} 个分类，${result.dishes} 道菜，${result.orders} 个订单`);
+  els.importDbInput.value = '';
 });
 
 els.aiFillBtn.addEventListener('click', async () => {

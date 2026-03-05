@@ -3,17 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>小周私房菜</title>
+    <title>宝宝餐厅</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <header class="hero card">
         <div class="brand">
-          <div class="avatar">🍳</div>
+          <div class="avatar">
+            <img id="brandImage" alt="标题图" />
+            <span id="brandEmoji">🍳</span>
+          </div>
           <div>
-            <h1>小周私房菜</h1>
-            <p>唯有爱与美食不可辜负</p>
+            <h1 id="brandTitle">宝宝餐厅</h1>
+            <p id="brandSubtitle">唯有爱与美食不可辜负</p>
           </div>
         </div>
         <div class="hero-actions">
@@ -44,12 +47,45 @@
       <section id="ordersView" class="view">
         <div class="card">
           <div class="panel-title"><h2>订单处理</h2></div>
+          <div class="order-tools">
+            <div id="orderFilterBar" class="chip-bar"></div>
+            <button id="kitchenModeBtn" class="ghost">厨房模式：关</button>
+          </div>
           <div id="ordersList" class="orders-list"></div>
         </div>
       </section>
 
       <section id="adminView" class="view">
         <div class="card admin-grid">
+          <section>
+            <div class="panel-title">
+              <h2>数据备份</h2>
+            </div>
+            <div class="inline">
+              <button id="exportDbBtn" class="ghost">一键导出 db.json</button>
+            </div>
+            <div class="upload-box">
+              <label>导入 db.json<input id="importDbInput" type="file" accept="application/json,.json" /></label>
+              <button type="button" id="importDbBtn">导入并覆盖当前数据</button>
+            </div>
+          </section>
+
+          <section>
+            <div class="panel-title">
+              <h2>店铺标题设置</h2>
+            </div>
+            <form id="brandForm" class="form-grid">
+              <label>标题文本<input name="title" required /></label>
+              <label>副标题文本<input name="subtitle" /></label>
+              <div class="upload-box">
+                <label>标题图上传<input id="brandImageUploadInput" type="file" accept="image/*" /></label>
+                <button type="button" id="uploadBrandImageBtn" class="ghost">上传标题图</button>
+                <img id="brandImagePreview" class="brand-preview" alt="标题图预览" />
+              </div>
+              <button type="submit">保存标题设置</button>
+            </form>
+          </section>
+
           <section>
             <div class="panel-title">
               <h2>分类管理（拖拽排序）</h2>

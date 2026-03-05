@@ -54,6 +54,11 @@ module.exports = {
   orders: [],
   settings: {
     kitchenSortMode: 'manual',
+    brand: {
+      title: '宝宝餐厅',
+      subtitle: '唯有爱与美食不可辜负',
+      image: ''
+    },
     updatedAt: new Date().toISOString()
   }
 };
