@@ -3,63 +3,157 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>女朋友点菜</title>
+    <title>小周私房菜</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="app">
-      <header class="topbar">
-        <h1>今晚吃什么</h1>
-        <p>给女朋友的点菜本</p>
+    <main class="app-shell">
+      <header class="hero card">
+        <div class="brand">
+          <div class="avatar">🍳</div>
+          <div>
+            <h1>小周私房菜</h1>
+            <p>唯有爱与美食不可辜负</p>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <input id="searchInput" type="search" placeholder="搜索菜名/介绍" />
+          <select id="sortMode">
+            <option value="manual">手动排序</option>
+            <option value="name">按菜名字母</option>
+            <option value="count">按点菜次数</option>
+          </select>
+        </div>
       </header>
 
-      <section class="controls card">
-        <label for="sortMode">排序方式</label>
-        <select id="sortMode">
-          <option value="manual">手动排序</option>
-          <option value="name">自动：按菜名字母</option>
-          <option value="count">自动：按点菜次数</option>
-        </select>
-        <p class="tip">手动排序模式下可使用上移/下移按钮调整。</p>
+      <section id="kitchenView" class="view active">
+        <div class="kitchen-layout card">
+          <aside class="category-panel">
+            <h2>分类</h2>
+            <ul id="categoryList"></ul>
+          </aside>
+          <section class="dish-panel">
+            <div class="panel-title">
+              <h2 id="activeCategoryTitle">菜品</h2>
+            </div>
+            <div id="dishList" class="dish-list"></div>
+          </section>
+        </div>
       </section>
 
-      <section id="dishList" class="list"></section>
+      <section id="ordersView" class="view">
+        <div class="card">
+          <div class="panel-title"><h2>订单处理</h2></div>
+          <div id="ordersList" class="orders-list"></div>
+        </div>
+      </section>
+
+      <section id="adminView" class="view">
+        <div class="card admin-grid">
+          <section>
+            <div class="panel-title">
+              <h2>分类管理（拖拽排序）</h2>
+              <button id="saveCategoryOrderBtn" class="ghost">保存顺序</button>
+            </div>
+            <ul id="adminCategoryList" class="draggable-list"></ul>
+            <form id="addCategoryForm" class="mini-form">
+              <input name="icon" placeholder="图标，如 🥩" required />
+              <input name="name" placeholder="分类名" required />
+              <button type="submit">新增分类</button>
+            </form>
+          </section>
+
+          <section>
+            <div class="panel-title">
+              <h2>菜品管理（拖拽手动排序）</h2>
+              <div>
+                <button id="newDishBtn" class="ghost">新增菜品</button>
+                <button id="saveDishOrderBtn" class="ghost">保存顺序</button>
+              </div>
+            </div>
+            <ul id="adminDishOrderList" class="draggable-list"></ul>
+          </section>
+        </div>
+      </section>
     </main>
 
-    <template id="dishCardTemplate">
-      <article class="dish card">
-        <div class="dish-main">
-          <div>
-            <h2 class="dish-name"></h2>
-            <p class="dish-meta"></p>
-          </div>
-          <a class="detail-link">详情</a>
-        </div>
+    <div id="cartBar" class="cart-bar hidden">
+      <div>
+        <strong id="cartCount">0</strong> 道菜已加入菜单
+      </div>
+      <button id="openCartBtn">查看菜单</button>
+    </div>
 
-        <div class="actions">
-          <button class="order-btn">点这道菜 +1</button>
-          <div class="inline">
-            <label>辣度</label>
-            <select class="spice-select">
+    <dialog id="dishModal" class="modal">
+      <article class="modal-card">
+        <button data-close class="close">×</button>
+        <img id="modalImage" alt="菜品图" />
+        <h3 id="modalName"></h3>
+        <p id="modalDesc"></p>
+        <p><strong>预计时间：</strong><span id="modalTime"></span> 分钟</p>
+        <div class="inline">
+          <label>辣度</label>
+          <select id="modalSpice"></select>
+        </div>
+        <section>
+          <h4>食材准备</h4>
+          <ul id="modalIngredients"></ul>
+        </section>
+        <section>
+          <h4>配料用量</h4>
+          <ul id="modalSeasonings"></ul>
+        </section>
+        <section>
+          <h4>制作流程</h4>
+          <ol id="modalSteps"></ol>
+        </section>
+        <button id="modalAddBtn">加入菜单</button>
+      </article>
+    </dialog>
+
+    <dialog id="cartModal" class="modal">
+      <article class="modal-card">
+        <button data-close class="close">×</button>
+        <h3>待下单菜单</h3>
+        <div id="cartItems"></div>
+        <textarea id="orderNote" rows="2" placeholder="备注（比如少盐、少油）"></textarea>
+        <button id="submitOrderBtn">确认下单</button>
+      </article>
+    </dialog>
+
+    <dialog id="dishEditorModal" class="modal">
+      <article class="modal-card">
+        <button data-close class="close">×</button>
+        <h3 id="editorTitle">编辑菜品</h3>
+        <form id="dishForm" class="form-grid">
+          <input type="hidden" name="id" />
+          <label>菜名<input name="name" required /></label>
+          <label>分类<select name="categoryId" id="formCategory"></select></label>
+          <label>图片 URL<input name="image" placeholder="留空使用默认图" /></label>
+          <label>辣度
+            <select name="spiceLevel">
               <option value="不辣">不辣</option>
               <option value="微辣">微辣</option>
               <option value="中辣">中辣</option>
               <option value="特辣">特辣</option>
             </select>
-          </div>
-          <div class="inline">
-            <label>次数</label>
-            <button class="count-btn minus">-</button>
-            <input class="count-input" type="number" min="0" />
-            <button class="count-btn plus">+</button>
-          </div>
-          <div class="inline manual-only">
-            <button class="move-btn up">上移</button>
-            <button class="move-btn down">下移</button>
-          </div>
-        </div>
+          </label>
+          <label>预计分钟<input name="estimateMinutes" type="number" min="1" required /></label>
+          <label>点菜次数<input name="orderCount" type="number" min="0" required /></label>
+          <label class="full">介绍<textarea name="description" rows="2"></textarea></label>
+          <label class="full">食材（每行一条）<textarea name="ingredients" rows="4"></textarea></label>
+          <label class="full">配料（每行一条）<textarea name="seasonings" rows="4"></textarea></label>
+          <label class="full">制作流程（每行一步）<textarea name="steps" rows="5"></textarea></label>
+          <button type="submit">保存菜品</button>
+        </form>
       </article>
-    </template>
+    </dialog>
+
+    <nav class="bottom-nav">
+      <button data-view="kitchen" class="active">厨房</button>
+      <button data-view="orders">订单</button>
+      <button data-view="admin">管理</button>
+    </nav>
 
     <script src="/main.js"></script>
   </body>
