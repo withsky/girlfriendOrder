@@ -27,7 +27,7 @@ const categoryByName = {
 };
 
 function buildDishImages(id) {
-  return [`/uploads/samples/${id}-1.jpg`, `/uploads/samples/${id}-2.jpg`];
+  return [`/uploads/generated/${id}-1__orig.webp`, `/uploads/generated/${id}-2__orig.webp`];
 }
 
 function guessMinutes(name) {
@@ -57,7 +57,7 @@ module.exports = {
     brand: {
       title: '宝宝餐厅',
       subtitle: '唯有爱与美食不可辜负',
-      image: ''
+      image: '/uploads/generated/brand-baby-restaurant__orig.webp'
     },
     updatedAt: new Date().toISOString()
   }

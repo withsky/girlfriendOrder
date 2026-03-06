@@ -59,6 +59,13 @@ npm start
 node scripts/download-samples.js
 ```
 
+## 重新生成菜品图与品牌图
+会先清空 `public/uploads/`，再按菜名和品牌名批量生成新图并替换引用：
+
+```bash
+node scripts/regenerate-assets.js
+```
+
 ## DeepSeek 配置
 设置环境变量后，管理页“AI 填写”按钮可用：
 
@@ -69,6 +76,11 @@ export DEEPSEEK_MODEL=deepseek-chat
 export DEEPSEEK_BASE_URL=https://api.deepseek.com/v1/chat/completions
 npm start
 ```
+
+## 自动保存（防断点关闭）
+- 菜品编辑弹窗：输入内容和图片排序会自动保存草稿（本地浏览器）
+- 品牌设置表单：标题/副标题/标题图会自动保存草稿（本地浏览器）
+- 订单备注：自动保存草稿（本地浏览器）
 
 ## NAS + 域名
 按你现有方案将域名反向代理到 `http://127.0.0.1:3000` 即可，建议开启 HTTPS。
