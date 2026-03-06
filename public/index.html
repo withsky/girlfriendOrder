@@ -52,6 +52,7 @@
             <button id="kitchenModeBtn" class="ghost">厨房模式：关</button>
           </div>
           <div id="ordersList" class="orders-list"></div>
+          <div id="ordersPager" class="orders-pager"></div>
         </div>
       </section>
 
@@ -145,6 +146,12 @@
         <section>
           <h4>制作流程</h4>
           <ol id="modalSteps"></ol>
+        </section>
+        <section class="dish-history">
+          <h4>点单历史</h4>
+          <p id="modalLastOrdered" class="muted">暂无点单记录</p>
+          <button id="modalHistoryToggle" type="button" class="ghost history-toggle hidden">查看历史日期</button>
+          <ul id="modalHistoryList" class="history-list hidden"></ul>
         </section>
         <button id="modalAddBtn">加入菜单</button>
       </article>

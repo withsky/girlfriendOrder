@@ -16,6 +16,8 @@ const state = {
   aiEnabled: false,
   editorImages: [],
   orderFilter: 'all',
+  orderPage: 1,
+  orderPageSize: 8,
   kitchenMode: false,
   previewImages: [],
   previewIndex: 0,
@@ -58,6 +60,9 @@ const els = {
   modalIngredients: document.getElementById('modalIngredients'),
   modalSeasonings: document.getElementById('modalSeasonings'),
   modalSteps: document.getElementById('modalSteps'),
+  modalLastOrdered: document.getElementById('modalLastOrdered'),
+  modalHistoryToggle: document.getElementById('modalHistoryToggle'),
+  modalHistoryList: document.getElementById('modalHistoryList'),
   modalAddBtn: document.getElementById('modalAddBtn'),
   cartItems: document.getElementById('cartItems'),
   submitOrderBtn: document.getElementById('submitOrderBtn'),
@@ -68,6 +73,7 @@ const els = {
   planTimeline: document.getElementById('planTimeline'),
   planTips: document.getElementById('planTips'),
   ordersList: document.getElementById('ordersList'),
+  ordersPager: document.getElementById('ordersPager'),
   orderFilterBar: document.getElementById('orderFilterBar'),
   kitchenModeBtn: document.getElementById('kitchenModeBtn'),
   adminCategoryList: document.getElementById('adminCategoryList'),
@@ -186,6 +192,24 @@ function orderNoByTime(iso) {
   const d = new Date(iso);
   const pad = (num) => String(num).padStart(2, '0');
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function dishOrderHistory(dishId) {
+  const history = [];
+  state.orders.forEach((order) => {
+    if (order.status === 'cancelled') return;
+    const hasDish = Array.isArray(order.items) && order.items.some((item) => item.dishId === dishId);
+    if (hasDish && order.createdAt) history.push(order.createdAt);
+  });
+  history.sort((a, b) => new Date(b) - new Date(a));
+  return history;
+}
+
+function daysFromNow(iso) {
+  const date = new Date(iso);
+  const now = new Date();
+  const oneDay = 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.floor((now - date) / oneDay));
 }
 
 function statusLabel(status) {
@@ -394,6 +418,29 @@ function openDishModal(dishId) {
   fillList(els.modalIngredients, dish.ingredients || []);
   fillList(els.modalSeasonings, dish.seasonings || []);
   fillList(els.modalSteps, dish.steps || []);
+  const history = dishOrderHistory(dish.id);
+  els.modalHistoryList.innerHTML = '';
+  if (!history.length) {
+    els.modalLastOrdered.textContent = '暂无点单记录';
+    els.modalHistoryToggle.classList.add('hidden');
+    els.modalHistoryList.classList.add('hidden');
+  } else {
+    const last = history[0];
+    const days = daysFromNow(last);
+    els.modalLastOrdered.textContent = `上次点单：${days} 天前（${formatTime(last)}）`;
+    els.modalHistoryToggle.classList.remove('hidden');
+    els.modalHistoryList.classList.add('hidden');
+    els.modalHistoryToggle.textContent = `查看历史日期（${history.length} 次）`;
+    history.forEach((time, index) => {
+      const li = document.createElement('li');
+      li.textContent = `${index + 1}. ${formatTime(time)}`;
+      els.modalHistoryList.appendChild(li);
+    });
+    els.modalHistoryToggle.onclick = () => {
+      const hidden = els.modalHistoryList.classList.toggle('hidden');
+      els.modalHistoryToggle.textContent = hidden ? `查看历史日期（${history.length} 次）` : '收起历史日期';
+    };
+  }
 
   els.dishModal.showModal();
 }
@@ -529,6 +576,7 @@ function renderOrders() {
     btn.textContent = chip.label;
     btn.onclick = () => {
       state.orderFilter = chip.id;
+      state.orderPage = 1;
       renderOrders();
     };
     els.orderFilterBar.appendChild(btn);
@@ -544,8 +592,17 @@ function renderOrders() {
 
   if (!list.length) {
     els.ordersList.innerHTML = '<p class="muted">暂时没有订单</p>';
+    els.ordersPager.classList.add('hidden');
+    els.ordersPager.innerHTML = '';
     return;
   }
+
+  const total = list.length;
+  const totalPages = Math.max(1, Math.ceil(total / state.orderPageSize));
+  if (state.orderPage > totalPages) state.orderPage = totalPages;
+  if (state.orderPage < 1) state.orderPage = 1;
+  const start = (state.orderPage - 1) * state.orderPageSize;
+  list = list.slice(start, start + state.orderPageSize);
 
   list.forEach((order) => {
     const card = document.createElement('article');
@@ -625,6 +682,44 @@ function renderOrders() {
 
     els.ordersList.appendChild(card);
   });
+  renderOrdersPager(total, totalPages);
+}
+
+function renderOrdersPager(total, totalPages) {
+  if (totalPages <= 1) {
+    els.ordersPager.classList.add('hidden');
+    els.ordersPager.innerHTML = '';
+    return;
+  }
+
+  els.ordersPager.classList.remove('hidden');
+  els.ordersPager.innerHTML = '';
+
+  const prev = document.createElement('button');
+  prev.className = 'ghost';
+  prev.textContent = '上一页';
+  prev.disabled = state.orderPage <= 1;
+  prev.onclick = () => {
+    if (state.orderPage <= 1) return;
+    state.orderPage -= 1;
+    renderOrders();
+  };
+
+  const text = document.createElement('span');
+  text.className = 'pager-text';
+  text.textContent = `第 ${state.orderPage}/${totalPages} 页 · 共 ${total} 条`;
+
+  const next = document.createElement('button');
+  next.className = 'ghost';
+  next.textContent = '下一页';
+  next.disabled = state.orderPage >= totalPages;
+  next.onclick = () => {
+    if (state.orderPage >= totalPages) return;
+    state.orderPage += 1;
+    renderOrders();
+  };
+
+  els.ordersPager.append(prev, text, next);
 }
 
 function openOrderPlanModal(order) {
