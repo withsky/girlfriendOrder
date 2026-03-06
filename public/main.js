@@ -182,6 +182,12 @@ function formatTime(iso) {
   return d.toLocaleString('zh-CN', { hour12: false });
 }
 
+function orderNoByTime(iso) {
+  const d = new Date(iso);
+  const pad = (num) => String(num).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
 function statusLabel(status) {
   const map = {
     pending: '待处理',
@@ -548,7 +554,7 @@ function renderOrders() {
     const items = order.items.map((item) => `${item.name} x${item.qty}（${item.spiceLevel}）`).join('、');
     card.innerHTML = `
       <div class="panel-title order-header">
-        <strong>订单 ${order.id.slice(-6)}</strong>
+        <strong>订单 ${orderNoByTime(order.createdAt)}</strong>
         <span class="status ${order.status}">${statusLabel(order.status)}</span>
       </div>
       <p class="order-items">${items}</p>
@@ -624,7 +630,7 @@ function renderOrders() {
 function openOrderPlanModal(order) {
   if (!order || !order.kitchenPlan) return;
   const plan = order.kitchenPlan;
-  els.planTitle.textContent = `AI 出餐优化方案（订单 ${order.id.slice(-6)}）`;
+  els.planTitle.textContent = `AI 出餐优化方案（订单 ${orderNoByTime(order.createdAt)}）`;
   els.planSummary.textContent = plan.summary || '已生成整体出餐优化流程';
   els.planTotal.textContent = String(plan.totalMinutes || 0);
 

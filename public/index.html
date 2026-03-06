@@ -19,14 +19,6 @@
             <p id="brandSubtitle">唯有爱与美食不可辜负</p>
           </div>
         </div>
-        <div class="hero-actions">
-          <input id="searchInput" type="search" placeholder="搜索菜名/介绍" />
-          <select id="sortMode">
-            <option value="manual">手动排序</option>
-            <option value="name">按菜名字母</option>
-            <option value="count">按点菜次数</option>
-          </select>
-        </div>
       </header>
 
       <section id="kitchenView" class="view active">
@@ -38,6 +30,14 @@
           <section class="dish-panel">
             <div class="panel-title">
               <h2 id="activeCategoryTitle">菜品</h2>
+              <div class="kitchen-tools">
+                <input id="searchInput" type="search" placeholder="搜索菜名/介绍" />
+                <select id="sortMode">
+                  <option value="manual">手动排序</option>
+                  <option value="name">按菜名字母</option>
+                  <option value="count">按点菜次数</option>
+                </select>
+              </div>
             </div>
             <div id="dishList" class="dish-list"></div>
           </section>
@@ -45,7 +45,7 @@
       </section>
 
       <section id="ordersView" class="view">
-        <div class="card">
+        <div class="card orders-card">
           <div class="panel-title"><h2>订单处理</h2></div>
           <div class="order-tools">
             <div id="orderFilterBar" class="chip-bar"></div>

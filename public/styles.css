@@ -132,13 +132,6 @@ body::after {
   color: var(--muted);
 }
 
-.hero-actions {
-  margin-top: 14px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1fr 180px;
-}
-
 input,
 select,
 button,
@@ -279,6 +272,20 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
+}
+
+.kitchen-tools {
+  display: grid;
+  grid-template-columns: minmax(180px, 300px) 140px;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.kitchen-tools input,
+.kitchen-tools select {
+  width: 100%;
 }
 
 .dish-list,
@@ -649,17 +656,19 @@ button:disabled {
 }
 
 .order-tools {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
   gap: 10px;
-  margin: 8px 0 10px;
+  margin: 10px 0 12px;
+  min-width: 0;
 }
 
 .chip-bar {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .chip {
@@ -673,6 +682,11 @@ button:disabled {
   color: #0f693c;
   border-color: rgba(93, 165, 124, 0.44);
   background: linear-gradient(145deg, rgba(218, 244, 228, 0.96), rgba(206, 246, 231, 0.8));
+}
+
+.orders-card {
+  padding: 14px;
+  overflow: hidden;
 }
 
 .status {
@@ -907,8 +921,8 @@ button:disabled {
     grid-template-columns: 160px 1fr;
   }
 
-  .hero-actions {
-    grid-template-columns: 1fr;
+  .kitchen-tools {
+    grid-template-columns: minmax(150px, 1fr) 122px;
   }
 
   .dish-card {
@@ -1001,8 +1015,15 @@ button:disabled {
   }
 
   .order-tools {
-    align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .order-tools > button {
+    justify-self: start;
+  }
+
+  .kitchen-tools {
+    grid-template-columns: 1fr;
   }
 
   .order-actions {
